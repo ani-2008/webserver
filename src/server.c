@@ -11,6 +11,22 @@
 #define BACKLOG 5
 #define RECV_SIZE 1024
 #define BUF_SIZE 4096
+
+int send_all(int socket, const void *buffer, size_t len)
+{
+    size_t n;
+    const char *p = buffer;
+    while (len > 0) {
+        n = send(socket,buffer,len,0);
+        if ( n <= 0 ) {
+            return -1;
+        }
+        p += n;
+        len -= n;
+    }
+    return 0;
+}
+
 int main()
 {
     struct addrinfo  hints, *res;
@@ -20,12 +36,14 @@ int main()
     hints.ai_family = AF_INET; 
     hints.ai_socktype = SOCK_STREAM; 
     int yes = 1;
+    
 
     if ( (status = getaddrinfo(NULL, "6969", &hints, &res)) < 0) { 
         fprintf(stderr, "getaddrinfo: %s\n",gai_strerror(status)); 
         return 1;
     }
     
+    // create socket where we listen for requests
     int sockfd = socket(AF_INET, SOCK_STREAM, 0);
 
     if( sockfd < 0 ) {
@@ -34,17 +52,21 @@ int main()
     }
     
     printf("socket established...\n");
-
+    
+    // reuse socket if it's already in use
     if ( setsockopt(sockfd,SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes)) < 0 ) {
         perror("setsockopt");
         return 1;
     }
+
+    // bind to that port 
     if ( bind(sockfd, res->ai_addr, res->ai_addrlen) < 0 ) {
         perror("bind");
         return 1;
     }
     printf("binded...\n");
     
+    // start Listening on the IP on that port (localhost:6969)
     if ( listen(sockfd, BACKLOG) < 0 ) { 
         perror("listen");
         return 1;
@@ -56,8 +78,9 @@ int main()
     int new_fd;
     int bytes_read;
     char *status_msg;
-    int bytes_sent;
     FILE *html_file;
+    
+    // main loop where we accept new requests and close the new connection after their request was satisfied
     while (1) {
         status_msg = "200 OK";
         new_fd = accept(sockfd, (struct sockaddr *)&guest_addr, &addr_size);
@@ -70,7 +93,7 @@ int main()
         
         char buf[RECV_SIZE] = {0};
 
-        bytes_read = recv(new_fd, buf, sizeof(buf), 0);
+        bytes_read = recv(new_fd, buf, sizeof(buf), 0);   // get request
         if (bytes_read > 0) {
             printf("%s\n",buf);
         } else if ( bytes_read == 0 ) {
@@ -84,7 +107,7 @@ int main()
         char *f = buf + 5;
         *strchr(f, ' ') = 0;
     
-        html_file = fopen(f,"rb");
+        html_file = fopen(f,"rb"); // read the file they want 
         if(strlen(f) == 0) {
             f = "index.html";
             html_file = fopen(f,"rb"); 
@@ -99,7 +122,9 @@ int main()
     
         char header[500];
         struct stat st;
-        stat(f, &st);
+        stat(f, &st); // get file size and other stats of the file we need 
+        
+        // send header first
         sprintf(header,
                 "HTTP/1.1 %s\r\n"
                 "Content-Type: text/html\r\n"
@@ -108,21 +133,24 @@ int main()
                 st.st_size);
 
         char file_data[BUF_SIZE];
-        if ( send(new_fd, header, strlen(header), 0) < 0) {
+        if ( send_all(new_fd, header, strlen(header)) < 0) {
             perror("send");
             return 1;
         }
+
+        // send the file that's requested
         while ((bytes_read = fread(file_data, 1, BUF_SIZE, html_file)) > 0) {
-            bytes_sent = send(new_fd, file_data, bytes_read, 0);
-                if ( bytes_sent < 0) {
-                    perror("send");
-                    return 1;
-                }
-            
+            if ( send_all(new_fd,file_data,bytes_read) < 0) {
+                perror("send");
+                return 1;
+            }    
         }
+
         fclose(html_file);
         close(new_fd);
         printf("Connection closed...waiting for next guest...\n");
     }
     freeaddrinfo(res);
+    close(sockfd);
+
 }
