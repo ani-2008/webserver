@@ -55,9 +55,26 @@ int serve_404(int fd)
     while ((bytes_read = fread(file_data, 1, BUF_SIZE, html_file)) > 0) {
         if ( send_all(fd,file_data,bytes_read) < 0) {
             perror("send");
+            return 1;
         }    
     }
     return 0;
+}
+
+int serve_405(int fd)
+{
+    char header[500];
+    sprintf(header,"HTTP/1.1 405 Method Not Allowed\r\n"
+            "Allow: GET\r\n"
+            "Content-Type: text/plain\r\n"
+            "Content-Length: 23\r\n"
+            "405 Method Not Allowed\r\n");
+    if ( send_all(fd, header, strlen(header)) < 0) {
+        perror("send");
+        return 1;
+    }
+    return 0;
+    
 }
 
 int main()
@@ -141,6 +158,16 @@ int main()
             close(sockfd);
             return 1;
         }
+        char *requests = buf;
+        *strchr(requests,' ') = 0;
+        printf("%s\n",requests);
+        if (strcmp(requests,"GET") != 0) {
+            serve_405(new_fd);
+            close(new_fd);
+            printf("Connection closed...waiting for next guest...\n");
+            continue;
+        }
+            
         char *f = buf + 5;
         *strchr(f, ' ') = 0;
 
@@ -148,6 +175,7 @@ int main()
             printf("..hello\n");
             serve_404(new_fd);
             close(new_fd);
+            printf("Connection closed...waiting for next guest...\n");
             continue;
         }
         html_file = fopen(f,"rb"); // read the file they want 
@@ -157,6 +185,7 @@ int main()
         }else if (html_file == NULL) {
             serve_404(new_fd);
             close(new_fd);
+            printf("Connection closed...waiting for next guest...\n");
             continue;
         }
         char header[500];
@@ -164,6 +193,7 @@ int main()
         if (html_file == NULL) {
             serve_404(new_fd);
             close(new_fd);
+            printf("Connection closed...waiting for next guest...\n");
             continue;
         }
 
@@ -183,6 +213,7 @@ int main()
             perror("send");
             freeaddrinfo(res);
             close(sockfd);
+            printf("Connection closed...waiting for next guest...\n");
             return 1;
         }
 
@@ -192,6 +223,7 @@ int main()
                 perror("send");
                 freeaddrinfo(res);
                 close(sockfd);
+                printf("Connection closed...waiting for next guest...\n");
                 return 1;
             }    
         }
