@@ -1,10 +1,11 @@
 CC = gcc
 CFLAGS = -Wall -Wextra
-target = server
+target = bin/server
 src = src/server.c 
 
 all:
+	mkdir -p bin/
 	$(CC) $(CFLAGS) $(src) -o $(target) 
 
 clean:
-	rm $(target)
+	rm -rf bin/
