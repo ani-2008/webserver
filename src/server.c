@@ -69,6 +69,7 @@ int serve_404(int fd,char *requests, char *requested_file)
     while ((bytes_read = fread(file_data, 1, BUF_SIZE, html_file)) > 0) {
         if ( send_all(fd,file_data,bytes_read) < 0) {
             perror("send");
+            fclose(html_file);
             return 1;
         }    
     }
@@ -117,8 +118,10 @@ int main()
         perror("socket");
         return 1;
     }
-    printf("established the socket...\n"); 
-
+    t = time(NULL);
+    strftime(cur_time, 26, "%Y-%m-%d %H:%M:%S", localtime(&t));
+    printf("[%s] socket established\n",cur_time);
+    
     // reuse socket if it's already in use
     if ( setsockopt(sockfd,SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes)) < 0 ) {
         perror("setsockopt");
@@ -130,23 +133,27 @@ int main()
         perror("bind");
         return 1;
     }
-    printf("binded...\n");
+    t = time(NULL);
+    strftime(cur_time, 26, "%Y-%m-%d %H:%M:%S", localtime(&t));
+    printf("[%s] Binded\n",cur_time);
 
     // start Listening on the IP on that port (localhost:6969)
     if ( listen(sockfd, BACKLOG) < 0 ) { 
         perror("listen");
         return 1;
     }
-    printf("listening...\n");
+    t = time(NULL);
+    strftime(cur_time, 26, "%Y-%m-%d %H:%M:%S", localtime(&t));
+    printf("[%s] listening on 127.0.0.1 6969\n",cur_time);
 
     struct sockaddr_storage guest_addr;
     socklen_t addr_size = sizeof(guest_addr);
     int new_fd;
     int bytes_read;
-    FILE *html_file;
+    FILE *html_file = NULL;
     
     // main loop where we accept new requests and close the new connection after their request was satisfied
-
+    
     while (1) {
         t = time(NULL);
 
@@ -202,13 +209,12 @@ int main()
         }
 
         char file_to_open[1024];
+        sprintf(file_to_open, "pages/%s", file_name);
+        html_file = fopen(file_to_open,"rb");
         if(strlen(file_name) == 0) {
-            strcpy(file_to_open,"pages/index.html\0");
+            strcpy(file_to_open,"pages/index.html");
             html_file = fopen(file_to_open,"rb");
         }else if (html_file == NULL) {
-            sprintf(file_to_open,"pages/%s",file_name);
-            html_file = fopen(file_to_open,"rb");
-        }else {
             serve_404(new_fd,requests,requested_file);
             close(new_fd);
             continue;
@@ -249,6 +255,7 @@ int main()
         }
 
         fclose(html_file);
+        html_file = NULL;
         close(new_fd);
     }
     freeaddrinfo(res);
