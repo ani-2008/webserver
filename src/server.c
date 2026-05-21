@@ -30,7 +30,10 @@ int send_all(int fd, const void *buffer, size_t len)
 int serve_500(int fd)
 {
     char header[500];
-    sprintf(header,"HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\n\r\n");
+    sprintf(header,"HTTP/1.1 500 Internal Server Error\r\n"
+            "Content-Type: text/plain\r\n"
+            "Content-Length: 27\r\n\r\n"
+            "500 Internal Server Error\r\n");
     send_all(fd,header,strlen(header));
     return 0;
 }
@@ -39,13 +42,13 @@ int serve_404(int fd)
 {
     char header[500];
     struct stat st;
-    FILE *html_file = fopen("404.html","r");
+    FILE *html_file = fopen("public/404.html","rb");
     if (html_file == NULL) {
         serve_500(fd);
         return 1;
     }
 
-    stat("404.html",&st);
+    stat("public/404.html",&st);
     sprintf(header, "HTTP/1.1 404 Not Found\r\nContent-Type: text/html\r\nContent-Length: %ld\r\n\r\n",st.st_size);
     send_all(fd, header, strlen(header));
     
@@ -67,7 +70,7 @@ int serve_405(int fd)
     sprintf(header,"HTTP/1.1 405 Method Not Allowed\r\n"
             "Allow: GET\r\n"
             "Content-Type: text/plain\r\n"
-            "Content-Length: 23\r\n"
+            "Content-Length: 25\r\n\r\n"
             "405 Method Not Allowed\r\n");
     if ( send_all(fd, header, strlen(header)) < 0) {
         perror("send");
@@ -160,9 +163,9 @@ int main()
         }
         char *requests = buf;
         *strchr(requests,' ') = 0;
-        printf("%s\n",requests);
+
         if (strcmp(requests,"GET") != 0) {
-            serve_405(new_fd);
+            serve_405(new_fd); // 405 code if there is any request other than GET 
             close(new_fd);
             printf("Connection closed...waiting for next guest...\n");
             continue;
@@ -180,7 +183,7 @@ int main()
         }
         html_file = fopen(f,"rb"); // read the file they want 
         if(strlen(f) == 0) {
-            f = "index.html";
+            f = "public/index.html";
             html_file = fopen(f,"rb");
         }else if (html_file == NULL) {
             serve_404(new_fd);
@@ -189,13 +192,6 @@ int main()
             continue;
         }
         char header[500];
-
-        if (html_file == NULL) {
-            serve_404(new_fd);
-            close(new_fd);
-            printf("Connection closed...waiting for next guest...\n");
-            continue;
-        }
 
         struct stat st;
         // get file size and other stats of the file we need
@@ -234,5 +230,4 @@ int main()
     }
     freeaddrinfo(res);
     close(sockfd);
-
 }
