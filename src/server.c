@@ -7,10 +7,14 @@
 #include <netinet/in.h>
 #include <netdb.h>
 #include <arpa/inet.h>
+#include <time.h> 
 
 #define BACKLOG 5
 #define RECV_SIZE 1024
 #define BUF_SIZE 4096
+
+char cur_time[26];
+time_t t;
 
 int send_all(int fd, const void *buffer, size_t len)
 {
@@ -27,34 +31,41 @@ int send_all(int fd, const void *buffer, size_t len)
     return 0;
 }
 
-int serve_500(int fd)
+int serve_500(int fd, char *requests)
 {
+    t = time(NULL);
     char header[500];
     sprintf(header,"HTTP/1.1 500 Internal Server Error\r\n"
             "Content-Type: text/plain\r\n"
             "Content-Length: 27\r\n\r\n"
             "500 Internal Server Error\r\n");
     send_all(fd,header,strlen(header));
+
+    strftime(cur_time, 26, "%Y-%m-%d %H:%M:%S", localtime(&t));
+    printf("[%s] 127.0.0.1 6969 %s 500 Internal Server Error\n",cur_time,requests);
     return 0;
 }
 
-int serve_404(int fd)
+int serve_404(int fd,char *requests, char *requested_file)
 {
+    t = time(NULL);
     char header[500];
     struct stat st;
-    FILE *html_file = fopen("public/404.html","rb");
+    FILE *html_file = fopen("pages/404.html","rb");
     if (html_file == NULL) {
-        serve_500(fd);
+        serve_500(fd,requests);
         return 1;
     }
 
-    stat("public/404.html",&st);
+    stat("pages/404.html",&st);
     sprintf(header, "HTTP/1.1 404 Not Found\r\nContent-Type: text/html\r\nContent-Length: %ld\r\n\r\n",st.st_size);
     send_all(fd, header, strlen(header));
     
     int bytes_read;
     char file_data[BUF_SIZE];
- 
+    strftime(cur_time, 26, "%Y-%m-%d %H:%M:%S", localtime(&t));
+    printf("[%s] 127.0.0.1 6969 %s %s 404 Not Found\n",cur_time,requests,requested_file);
+
     while ((bytes_read = fread(file_data, 1, BUF_SIZE, html_file)) > 0) {
         if ( send_all(fd,file_data,bytes_read) < 0) {
             perror("send");
@@ -64,8 +75,11 @@ int serve_404(int fd)
     return 0;
 }
 
-int serve_405(int fd)
+int serve_405(int fd, char *requests)
 {
+    t = time(NULL);
+    strftime(cur_time, 26, "%Y-%m-%d %H:%M:%S", localtime(&t));
+    printf("[%s] 127.0.0.1 6969 %s 405 Method Not Allowed\n",cur_time,requests);
     char header[500];
     sprintf(header,"HTTP/1.1 405 Method Not Allowed\r\n"
             "Allow: GET\r\n"
@@ -103,9 +117,8 @@ int main()
         perror("socket");
         return 1;
     }
-    
-    printf("socket established...\n");
-    
+    printf("established the socket...\n"); 
+
     // reuse socket if it's already in use
     if ( setsockopt(sockfd,SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes)) < 0 ) {
         perror("setsockopt");
@@ -118,14 +131,14 @@ int main()
         return 1;
     }
     printf("binded...\n");
-    
+
     // start Listening on the IP on that port (localhost:6969)
     if ( listen(sockfd, BACKLOG) < 0 ) { 
         perror("listen");
         return 1;
     }
-    printf("Listening on IP 127.0.0.1 on port 6969...\n");
-    
+    printf("listening...\n");
+
     struct sockaddr_storage guest_addr;
     socklen_t addr_size = sizeof(guest_addr);
     int new_fd;
@@ -133,7 +146,10 @@ int main()
     FILE *html_file;
     
     // main loop where we accept new requests and close the new connection after their request was satisfied
+
     while (1) {
+        t = time(NULL);
+
         new_fd = accept(sockfd, (struct sockaddr *)&guest_addr, &addr_size);
         addr_size = sizeof(guest_addr);
 
@@ -143,14 +159,24 @@ int main()
             close(sockfd);
             return 1;
         }
-    
-        printf("accepted...\n\n");
         
+        strftime(cur_time, 26, "%Y-%m-%d %H:%M:%S", localtime(&t));
+        printf("[%s] accepted\n",cur_time);
+
         char buf[RECV_SIZE] = {0};
 
         bytes_read = recv(new_fd, buf, sizeof(buf), 0);   // get request
+        
+        char *requests = buf;
+        *strchr(requests,' ') = 0;
+        char *requested_file = buf + 4;
+        char *file_name = buf + 5;
+        *strchr(file_name, ' ') = 0;
+        strftime(cur_time, 26, "%Y-%m-%d %H:%M:%S", localtime(&t));
+
+        
         if (bytes_read > 0) {
-            printf("%s\n",buf);
+            ;
         } else if ( bytes_read == 0 ) {
             fprintf(stderr, "Connection is closed\n");
             close(new_fd);
@@ -161,41 +187,41 @@ int main()
             close(sockfd);
             return 1;
         }
-        char *requests = buf;
-        *strchr(requests,' ') = 0;
 
         if (strcmp(requests,"GET") != 0) {
-            serve_405(new_fd); // 405 code if there is any request other than GET 
+            serve_405(new_fd,requests); // 405 code if there is any request other than GET 
             close(new_fd);
-            printf("Connection closed...waiting for next guest...\n");
             continue;
         }
-            
-        char *f = buf + 5;
-        *strchr(f, ' ') = 0;
 
-        if(strstr(f,"..")) {
+        if(strstr(file_name,"..")) {
             printf("..hello\n");
-            serve_404(new_fd);
+            serve_404(new_fd,requests,requested_file);
             close(new_fd);
-            printf("Connection closed...waiting for next guest...\n");
             continue;
         }
-        html_file = fopen(f,"rb"); // read the file they want 
-        if(strlen(f) == 0) {
-            f = "public/index.html";
-            html_file = fopen(f,"rb");
+
+        char file_to_open[1024];
+        if(strlen(file_name) == 0) {
+            strcpy(file_to_open,"pages/index.html\0");
+            html_file = fopen(file_to_open,"rb");
         }else if (html_file == NULL) {
-            serve_404(new_fd);
+            sprintf(file_to_open,"pages/%s",file_name);
+            html_file = fopen(file_to_open,"rb");
+        }else {
+            serve_404(new_fd,requests,requested_file);
             close(new_fd);
-            printf("Connection closed...waiting for next guest...\n");
             continue;
         }
         char header[500];
 
         struct stat st;
         // get file size and other stats of the file we need
-        stat(f, &st);
+        stat(file_to_open, &st);
+
+        strftime(cur_time, 26, "%Y-%m-%d %H:%M:%S", localtime(&t));
+        printf("[%s] 127.0.0.1 6969 %s %s 200 OK\n",cur_time,requests,requested_file);
+
         sprintf(header,
                 "HTTP/1.1 200 OK\r\n"
                 "Content-Type: text/html\r\n"
@@ -209,7 +235,6 @@ int main()
             perror("send");
             freeaddrinfo(res);
             close(sockfd);
-            printf("Connection closed...waiting for next guest...\n");
             return 1;
         }
 
@@ -219,14 +244,12 @@ int main()
                 perror("send");
                 freeaddrinfo(res);
                 close(sockfd);
-                printf("Connection closed...waiting for next guest...\n");
                 return 1;
             }    
         }
 
         fclose(html_file);
         close(new_fd);
-        printf("Connection closed...waiting for next guest...\n");
     }
     freeaddrinfo(res);
     close(sockfd);
