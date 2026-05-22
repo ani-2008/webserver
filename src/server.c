@@ -35,7 +35,8 @@ int serve_500(int fd, char *requests)
 {
     t = time(NULL);
     char header[500];
-    sprintf(header,"HTTP/1.1 500 Internal Server Error\r\n"
+    snprintf(header, sizeof(header),
+            "HTTP/1.1 500 Internal Server Error\r\n"
             "Content-Type: text/plain\r\n"
             "Content-Length: 27\r\n\r\n"
             "500 Internal Server Error\r\n");
@@ -58,7 +59,7 @@ int serve_404(int fd,char *requests, char *requested_file)
     }
 
     stat("pages/404.html",&st);
-    sprintf(header, "HTTP/1.1 404 Not Found\r\nContent-Type: text/html\r\nContent-Length: %ld\r\n\r\n",st.st_size);
+    snprintf(header,sizeof(header),"HTTP/1.1 404 Not Found\r\nContent-Type: text/html\r\nContent-Length: %ld\r\n\r\n",st.st_size);
     send_all(fd, header, strlen(header));
     
     int bytes_read;
@@ -82,7 +83,8 @@ int serve_405(int fd, char *requests)
     strftime(cur_time, 26, "%Y-%m-%d %H:%M:%S", localtime(&t));
     printf("[%s] 127.0.0.1 6969 %s 405 Method Not Allowed\n",cur_time,requests);
     char header[500];
-    sprintf(header,"HTTP/1.1 405 Method Not Allowed\r\n"
+    snprintf(header,sizeof(header),
+            "HTTP/1.1 405 Method Not Allowed\r\n"
             "Allow: GET\r\n"
             "Content-Type: text/plain\r\n"
             "Content-Length: 25\r\n\r\n"
@@ -175,10 +177,22 @@ int main()
         bytes_read = recv(new_fd, buf, sizeof(buf), 0);   // get request
         
         char *requests = buf;
-        *strchr(requests,' ') = 0;
+        char *space_1 = strchr(requests,' ');
+        if (space_1 == NULL) {
+            close(new_fd);
+            continue;
+        }
+        *space_1 = 0;
+
         char *requested_file = buf + 4;
         char *file_name = buf + 5;
-        *strchr(file_name, ' ') = 0;
+        char *space_2 = strchr(file_name, ' ');
+        if (space_2 == NULL) {
+            close(new_fd);
+            continue;
+        }
+        *space_2 = 0;
+
         strftime(cur_time, 26, "%Y-%m-%d %H:%M:%S", localtime(&t));
 
         
@@ -209,10 +223,10 @@ int main()
         }
 
         char file_to_open[1024];
-        sprintf(file_to_open, "pages/%s", file_name);
+        snprintf(file_to_open,sizeof(file_to_open),"pages/%s", file_name);
         html_file = fopen(file_to_open,"rb");
         if(strlen(file_name) == 0) {
-            strcpy(file_to_open,"pages/index.html");
+            strncpy(file_to_open,"pages/index.html",sizeof(file_to_open) - 1);
             html_file = fopen(file_to_open,"rb");
         }else if (html_file == NULL) {
             serve_404(new_fd,requests,requested_file);
@@ -228,7 +242,8 @@ int main()
         strftime(cur_time, 26, "%Y-%m-%d %H:%M:%S", localtime(&t));
         printf("[%s] 127.0.0.1 6969 %s %s 200 OK\n",cur_time,requests,requested_file);
 
-        sprintf(header,
+        snprintf(header,
+                sizeof(header),
                 "HTTP/1.1 200 OK\r\n"
                 "Content-Type: text/html\r\n"
                 "Content-Length: %ld\r\n\r\n",
