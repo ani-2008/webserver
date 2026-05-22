@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <string.h>
+#include <signal.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/stat.h> 
@@ -99,6 +100,7 @@ int serve_405(int fd, char *requests)
 
 int main()
 {
+    signal(SIGPIPE, SIG_IGN);
     struct addrinfo  hints, *res;
     int status;
 
