@@ -34,5 +34,5 @@ if files like `pages/404.html` is missing then results in `500 Internal Server E
 
 ## To-Do ##
 - [ ] Multi-threading
-- [ ] MIME detection
+- [x] MIME detection
 
