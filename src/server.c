@@ -17,6 +17,42 @@
 char cur_time[26];
 time_t t;
 
+typedef struct {
+	const char *key;
+	const char *value;
+} Dictionary;
+
+
+#define TYPES_COUNT 16
+
+Dictionary mime_dictionary[TYPES_COUNT];
+
+const char *EXTENSIONS[TYPES_COUNT] = {".html", ".htm", ".css", ".js", ".mjs", ".json", ".png", ".jpg", ".jpeg", ".gif", ".svg",
+	".ico", ".txt", ".pdf", ".woff2",".jsx"};
+
+const char *MIME_TYPE[TYPES_COUNT] = {"text/html", "text/html", "text/css", "application/javascript", "application/javascript", 
+	"application/json",	"image/png", "image/jpeg", "image/jpeg", "image/gif", "image/svg+xml", "image/x-icon", "text/plain",
+	"application/pdf", "font/woff2","application/javascript"};
+
+void init_dictionary()
+{
+	for(int i = 0; i < TYPES_COUNT; i++) {
+		mime_dictionary[i].key = EXTENSIONS[i];
+		mime_dictionary[i].value = MIME_TYPE[i];
+	}
+	
+}
+
+char *get_val(const char* key)
+{
+	for(int i = 0; i < TYPES_COUNT; i++) {
+		if(!strcmp(key,mime_dictionary[i].key)) {
+			return (char *)mime_dictionary[i].value;
+		}
+	}
+	return "";
+}
+
 int send_all(int fd, const void *buffer, size_t len)
 {
     size_t n;
@@ -100,6 +136,8 @@ int serve_405(int fd, char *requests)
 
 int main()
 {
+	init_dictionary();
+
     signal(SIGPIPE, SIG_IGN);
     struct addrinfo  hints, *res;
     int status;
@@ -243,12 +281,13 @@ int main()
 
         strftime(cur_time, 26, "%Y-%m-%d %H:%M:%S", localtime(&t));
         printf("[%s] 127.0.0.1 6969 %s %s 200 OK\n",cur_time,requests,requested_file);
-
+		char *type = get_val(strchr(file_to_open,'.'));
         snprintf(header,
                 sizeof(header),
                 "HTTP/1.1 200 OK\r\n"
-                "Content-Type: text/html\r\n"
+                "Content-Type: %s\r\n"
                 "Content-Length: %ld\r\n\r\n",
+				type,
                 st.st_size);
 
         char file_data[BUF_SIZE];
@@ -260,7 +299,6 @@ int main()
             close(sockfd);
             return 1;
         }
-
         // send the file that's requested
         while ((bytes_read = fread(file_data, 1, BUF_SIZE, html_file)) > 0) {
             if ( send_all(new_fd,file_data,bytes_read) < 0) {
