@@ -24,13 +24,15 @@ make
 
 ## Testing ##
 
-Go to browser and type `http:/localhost:6969/` and it will serve `pages/index.html` directory.
+- Make directory `pages` with all files that needed to be served including `index.html`
 
-Any other invalid files which is not in `pages/` gets requested, a 404 page will be served
+- Go to browser and type `http:/localhost:6969/` and it will serve `pages/index.html` directory.
 
-if there is any other request other than `GET` like `POST` from `pages/post.html` will result in `405 Method Not Allowed`
+- Any other invalid files which is not in `pages/` gets requested, a 404 page will be served
 
-if files like `pages/404.html` is missing then results in `500 Internal Server Error` 
+- if there is any other request other than `GET` like `POST` from `pages/post.html` will result in `405 Method Not Allowed`
+
+- if files like `pages/404.html` is missing then results in `500 Internal Server Error` 
 
 ## To-Do ##
 - [ ] Multi-threading
